@@ -1,13 +1,34 @@
+// settings.gradle (Groovy 语法)
+pluginManagement {
+    repositories {
+        // 添加阿里云 Gradle 插件镜像
+        maven {
+            url 'https://maven.aliyun.com/repository/gradle-plugin'
+        }
+        // 保留原来的作为备选
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+// 如果项目中没有 dependencyResolutionManagement，可以加上
+dependencyResolutionManagement {
+    repositories {
+        maven {
+            url 'https://maven.aliyun.com/repository/public'
+        }
+        mavenCentral()
+    }
+}
+
 include (
-    'aeron-annotations',
-    'aeron-client',
-    'aeron-driver',
-    'aeron-archive',
-    'aeron-cluster',
-    'aeron-agent',
-    'aeron-samples',
-    'aeron-system-tests',
-    'aeron-test-support',
-    'aeron-all')
-
-
+        'aeron-annotations',
+        'aeron-client',
+        'aeron-driver',
+        'aeron-archive',
+        'aeron-cluster',
+        'aeron-agent',
+        'aeron-samples',
+        'aeron-system-tests',
+        'aeron-test-support',
+        'aeron-all')
