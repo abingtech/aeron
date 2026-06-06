@@ -1450,3 +1450,10 @@ tasks.register('uploadArtifactsToCentralPortal', io.aeron.build.SonatypeCentralP
 wrapper {
     distributionType = 'ALL'
 }
+
+// 为所有子项目中的 JavaExec 任务统一添加 JVM 参数
+subprojects {
+    tasks.withType(JavaExec) {
+        jvmArgs '--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED'
+    }
+}

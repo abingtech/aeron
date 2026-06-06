@@ -64,6 +64,8 @@ public class SampleConfiguration
 
     static
     {
+        System.setProperty(EMBEDDED_MEDIA_DRIVER_PROP, "true");
+
         CHANNEL = System.getProperty(CHANNEL_PROP, "aeron:udp?endpoint=localhost:20121");
         STREAM_ID = Integer.getInteger(STREAM_ID_PROP, 1001);
         PING_CHANNEL = System.getProperty(PING_CHANNEL_PROP, "aeron:udp?endpoint=localhost:20123");

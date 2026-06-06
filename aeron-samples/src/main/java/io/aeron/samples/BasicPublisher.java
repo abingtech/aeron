@@ -42,6 +42,10 @@ public class BasicPublisher
     private static final long LINGER_TIMEOUT_MS = SampleConfiguration.LINGER_TIMEOUT_MS;
     private static final boolean EMBEDDED_MEDIA_DRIVER = SampleConfiguration.EMBEDDED_MEDIA_DRIVER;
 
+    static {
+        System.setProperty(SampleConfiguration.EMBEDDED_MEDIA_DRIVER_PROP, "true");
+    }
+
     /**
      * Main method for launching the process.
      *
