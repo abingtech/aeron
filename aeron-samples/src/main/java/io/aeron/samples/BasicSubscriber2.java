@@ -35,12 +35,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * For an example that implements reassembly of large, fragmented messages, see
  * {@link MultipleSubscribersWithFragmentAssembly}.
  */
-public class BasicSubscriber
+public class BasicSubscriber2
 {
     private static final int STREAM_ID = SampleConfiguration.STREAM_ID;
     private static final String CHANNEL = SampleConfiguration.CHANNEL;
     private static final int FRAGMENT_COUNT_LIMIT = SampleConfiguration.FRAGMENT_COUNT_LIMIT;
-    private static final boolean EMBEDDED_MEDIA_DRIVER = true;
+    private static final boolean EMBEDDED_MEDIA_DRIVER = false;
 
     /**
      * Main method for launching the process.
@@ -51,6 +51,10 @@ public class BasicSubscriber
     public static void main(final String[] args)
     {
         System.out.println("Subscribing to " + CHANNEL + " on stream id " + STREAM_ID);
+
+        // 指定与 Publisher 相同的 Aeron 目录
+        String aeronDir = "/tmp/aeron-basic";
+
         final AtomicBoolean running = new AtomicBoolean(true);
         try (ShutdownSignalBarrier barrier = new ShutdownSignalBarrier(() -> running.set(false));
             MediaDriver driver = EMBEDDED_MEDIA_DRIVER ?
@@ -60,10 +64,7 @@ public class BasicSubscriber
                 .availableImageHandler(SamplesUtil::printAvailableImage)
                 .unavailableImageHandler(SamplesUtil::printUnavailableImage);
 
-            if (EMBEDDED_MEDIA_DRIVER)
-            {
-                ctx.aeronDirectoryName(driver.aeronDirectoryName());
-            }
+            ctx.aeronDirectoryName(aeronDir);
 
             final FragmentHandler fragmentHandler = SamplesUtil.printAsciiMessage(STREAM_ID);
 

@@ -34,13 +34,13 @@ import java.util.concurrent.TimeUnit;
  * setting their corresponding properties via the command-line; e.g.:
  * -Daeron.sample.channel=aeron:udp?endpoint=localhost:5555 -Daeron.sample.streamId=20
  */
-public class BasicPublisher
+public class BasicPublisher2
 {
     private static final int STREAM_ID = SampleConfiguration.STREAM_ID;
     private static final String CHANNEL = SampleConfiguration.CHANNEL;
     private static final long NUMBER_OF_MESSAGES = SampleConfiguration.NUMBER_OF_MESSAGES;
     private static final long LINGER_TIMEOUT_MS = SampleConfiguration.LINGER_TIMEOUT_MS;
-    private static final boolean EMBEDDED_MEDIA_DRIVER = true;
+    private static final boolean EMBEDDED_MEDIA_DRIVER = SampleConfiguration.EMBEDDED_MEDIA_DRIVER;
 
     /**
      * Main method for launching the process.
@@ -52,9 +52,18 @@ public class BasicPublisher
     {
         System.out.println("Publishing to " + CHANNEL + " on stream id " + STREAM_ID);
 
+        // 指定一个固定的 Aeron 目录，例如 /tmp/aeron-basic
+        String aeronDir = "/tmp/aeron-basic";
+
+        // 配置 Media Driver 上下文
+        final MediaDriver.Context driverCtx = new MediaDriver.Context()
+                .aeronDirectoryName(aeronDir)
+                .dirDeleteOnStart(false)      // 启动时不删除
+                .dirDeleteOnShutdown(false);   // 关闭时不删除，便于 AeronStat 读取
+
         // If configured to do so, create an embedded media driver within this application rather
         // than relying on an external one.
-        try (MediaDriver driver = EMBEDDED_MEDIA_DRIVER ? MediaDriver.launchEmbedded() : null)
+        try (MediaDriver driver = EMBEDDED_MEDIA_DRIVER ? MediaDriver.launchEmbedded(driverCtx) : null)
         {
 
             final Aeron.Context ctx = new Aeron.Context();
