@@ -23,8 +23,8 @@
 #include "aeronmd.h"
 #include "util/aeron_fileutil.h"
 #include "concurrent/aeron_spsc_concurrent_array_queue.h"
-#include "concurrent/aeron_mpsc_concurrent_array_queue.h"
 #include "concurrent/aeron_mpsc_rb.h"
+#include "concurrent/aeron_spsc_rb.h"
 #include "concurrent/aeron_broadcast_descriptor.h"
 #include "aeron_flow_control.h"
 #include "aeron_congestion_control.h"
@@ -33,6 +33,13 @@
 #include "aeron_cnc_file_descriptor.h"
 #include "aeron_duty_cycle_tracker.h"
 #include "aeron_port_manager.h"
+
+#define AERON_DRIVER_AGENT_ROLE_NAME_NATIVE_RESOURCE_AGENT "aeron-md-nra"
+#define AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR "conductor"
+#define AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER "receiver"
+#define AERON_DRIVER_AGENT_ROLE_NAME_SENDER "sender"
+#define AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK "[sender, receiver]"
+#define AERON_DRIVER_AGENT_ROLE_NAME_SHARED "[conductor, sender, receiver]"
 
 #define AERON_COMMAND_RB_CAPACITY (128 * 1024)
 #define AERON_COMMAND_RB_RESERVE (1024)
@@ -52,9 +59,19 @@
 #define AERON_COUNTERS_VALUES_BUFFER_LENGTH_MAX UINT32_C(500 * 1024 * 1024)
 #define AERON_ERROR_BUFFER_LENGTH_DEFAULT (4 * 1024 * 1024)
 
+typedef bool (*aeron_end_of_life_resource_free_t)(void *resource);
+
+typedef struct aeron_end_of_life_resource_stct
+{
+    void *resource;
+    aeron_end_of_life_resource_free_t free_func;
+}
+aeron_end_of_life_resource_t;
+
 typedef struct aeron_driver_conductor_stct aeron_driver_conductor_t;
 
 typedef struct aeron_driver_conductor_proxy_stct aeron_driver_conductor_proxy_t;
+typedef struct aeron_driver_native_resource_agent_proxy_stct aeron_driver_native_resource_agent_proxy_t;
 typedef struct aeron_driver_sender_proxy_stct aeron_driver_sender_proxy_t;
 typedef struct aeron_driver_receiver_proxy_stct aeron_driver_receiver_proxy_t;
 typedef struct aeron_dl_loaded_libs_state_stct aeron_dl_loaded_libs_state_t;
@@ -62,8 +79,6 @@ typedef struct aeron_dl_loaded_libs_state_stct aeron_dl_loaded_libs_state_t;
 typedef aeron_rb_handler_t aeron_driver_conductor_to_driver_interceptor_func_t;
 typedef void (*aeron_driver_conductor_to_client_interceptor_func_t)(
     aeron_driver_conductor_t *conductor, int32_t msg_type_id, const void *message, size_t length);
-
-#define AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(m) (AERON_THREADING_MODE_SHARED == (m) || AERON_THREADING_MODE_INVOKER == (m))
 
 typedef struct aeron_driver_context_bindings_clientd_entry_stct
 {
@@ -161,7 +176,6 @@ typedef struct aeron_driver_context_stct
     bool rejoin_stream;                                     /* aeron.rejoin.stream = true */
     bool ats_enabled;
     bool connect_enabled;                                   /* aeron.driver.connect = true */
-    bool async_executor_enabled;                            /* aeron.driver.async.executor.enabled = true */
     uint64_t driver_timeout_ms;                             /* aeron.driver.timeout = 10s */
     uint64_t client_liveness_timeout_ns;                    /* aeron.client.liveness.timeout = 10s */
     uint64_t publication_linger_timeout_ns;                 /* aeron.publication.linger.timeout = 5s */
@@ -212,7 +226,7 @@ typedef struct aeron_driver_context_stct
     int32_t conductor_cpu_affinity_no;                      /* aeron.conductor.cpu.affinity = -1 */
     int32_t receiver_cpu_affinity_no;                       /* aeron.receiver.cpu.affinity = -1 */
     int32_t sender_cpu_affinity_no;                         /* aeron.sender.cpu.affinity = -1 */
-    int32_t async_cpu_affinity_no;                          /* aeron.async.cpu.affinity = -1 */
+    int32_t native_resource_agent_cpu_affinity_no;          /* aeron.driver.native.resource.agent.cpu.affinity = -1 */
     int32_t stream_session_limit;                           /* aeron.driver.stream.session.limit = INT32_MAX */
     bool cpuset_affinity;                                   /* aeron.driver.cpuset.affinity = false */
     bool cpuset_warnings_as_errors;                         /* aeron.driver.cpuset.warnings_as_errors = false */
@@ -247,9 +261,10 @@ typedef struct aeron_driver_context_stct
     aeron_clock_cache_t *sender_cached_clock;
     aeron_clock_cache_t *receiver_cached_clock;
 
-    aeron_mpsc_rb_t sender_command_queue;
-    aeron_mpsc_rb_t receiver_command_queue;
     aeron_mpsc_rb_t conductor_command_queue;
+    aeron_spsc_rb_t sender_command_queue;
+    aeron_spsc_rb_t receiver_command_queue;
+    aeron_spsc_rb_t native_resource_agent_command_queue;
 
     aeron_agent_on_start_func_t agent_on_start_func;
     void *agent_on_start_state;
@@ -281,10 +296,10 @@ typedef struct aeron_driver_context_stct
     char *receiver_idle_strategy_init_args;
     const char *receiver_idle_strategy_name;
 
-    aeron_idle_strategy_func_t async_executor_idle_strategy_func;
-    void *async_executor_idle_strategy_state;
-    char *async_executor_idle_strategy_init_args;
-    const char *async_executor_idle_strategy_name;
+    aeron_idle_strategy_func_t native_resource_agent_idle_strategy_func;
+    void *native_resource_agent_idle_strategy_state;
+    char *native_resource_agent_idle_strategy_init_args;
+    const char *native_resource_agent_idle_strategy_name;
 
     aeron_usable_fs_space_func_t usable_fs_space_func;
     aeron_raw_log_map_func_t raw_log_map_func;
@@ -297,6 +312,7 @@ typedef struct aeron_driver_context_stct
     aeron_congestion_control_strategy_supplier_func_t congestion_control_supplier_func;
 
     aeron_driver_conductor_proxy_t *conductor_proxy;
+    aeron_driver_native_resource_agent_proxy_t *native_resource_agent_proxy;
     aeron_driver_sender_proxy_t *sender_proxy;
     aeron_driver_receiver_proxy_t *receiver_proxy;
 

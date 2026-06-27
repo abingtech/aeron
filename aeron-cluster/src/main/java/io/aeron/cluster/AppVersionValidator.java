@@ -18,11 +18,12 @@ package io.aeron.cluster;
 import org.agrona.SemanticVersion;
 
 /**
- * Class to be used for determining AppVersion compatibility.
+ * Default {@link VersionValidator} used for determining AppVersion compatibility, which uses
+ * {@link org.agrona.SemanticVersion} major version for checking compatibility.
  * <p>
- * Default is to use {@link org.agrona.SemanticVersion} major version for checking compatibility.
+ * A custom policy can be supplied by implementing {@link VersionValidator}.
  */
-public final class AppVersionValidator
+public final class AppVersionValidator implements VersionValidator
 {
     private AppVersionValidator()
     {

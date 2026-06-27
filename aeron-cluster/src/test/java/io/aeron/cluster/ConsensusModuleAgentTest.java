@@ -488,7 +488,6 @@ class ConsensusModuleAgentTest
     void shouldDelegateHandlingToRegisteredExtension()
     {
         final ConsensusModuleExtension consensusModuleExtension = mock(ConsensusModuleExtension.class, "used adapter");
-        when(consensusModuleExtension.supportedSchemaId()).thenReturn(SCHEMA_ID);
         final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
         ctx.epochClock(clock.asEpochClock())
             .clusterClock(clock)
@@ -669,7 +668,7 @@ class ConsensusModuleAgentTest
 
         controlToggle.set(NEUTRAL.code());
 
-        final AppVersionValidator appVersionValidator = mock(AppVersionValidator.class);
+        final VersionValidator appVersionValidator = mock(VersionValidator.class);
         when(appVersionValidator.isVersionCompatible(anyInt(), anyInt())).thenReturn(true);
         ctx.moduleStateCounter(stateCounter)
             .controlToggleCounter(controlToggle)

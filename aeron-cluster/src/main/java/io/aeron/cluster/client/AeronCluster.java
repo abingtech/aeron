@@ -757,15 +757,32 @@ public final class AeronCluster implements AutoCloseable
 
     private Publication addNewLeaderIngressPublication(final Context ctx, final String channel, final int streamId)
     {
-        final long registrationId = asyncAddIngressPublication(ctx, channel, streamId);
+        long registrationId = asyncAddIngressPublication(ctx, channel, streamId);
         final long deadlineNs = nanoClock.nanoTime() + ctx.messageTimeoutNs();
         do
         {
-            final Publication publication = getIngressPublication(ctx, registrationId);
-            if (null != publication)
+            if (NULL_VALUE == registrationId)
             {
-                return publication;
+                registrationId = asyncAddIngressPublication(ctx, channel, streamId);
             }
+
+            try
+            {
+                final Publication publication = getIngressPublication(ctx, registrationId);
+                if (null != publication)
+                {
+                    return publication;
+                }
+            }
+            catch (final RegistrationException ex)
+            {
+                registrationId = NULL_VALUE;
+                if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE != ex.errorCode())
+                {
+                    throw ex;
+                }
+            }
+
             idleStrategy.idle(ctx.runAgentInvokers());
         }
         while (nanoClock.nanoTime() < deadlineNs);
@@ -2380,7 +2397,10 @@ public final class AeronCluster implements AutoCloseable
                     catch (final RegistrationException ex)
                     {
                         ingressRegistrationId = NULL_VALUE;
-                        throw ex;
+                        if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE != ex.errorCode())
+                        {
+                            throw ex;
+                        }
                     }
                 }
                 else
@@ -2391,27 +2411,7 @@ public final class AeronCluster implements AutoCloseable
             }
             else
             {
-                int count = 0;
-                for (final MemberIngress member : memberByIdMap.values())
-                {
-                    if (null != member.publication || null != member.publicationException)
-                    {
-                        count++;
-                    }
-                    else
-                    {
-                        if (NULL_VALUE == member.registrationId)
-                        {
-                            member.asyncAddPublication();
-                        }
-                        member.asyncGetPublication();
-                    }
-                }
-
-                if (memberByIdMap.size() == count)
-                {
-                    state(State.AWAIT_PUBLICATION_CONNECTED);
-                }
+                state(State.AWAIT_PUBLICATION_CONNECTED);
             }
         }
 
@@ -2424,8 +2424,12 @@ public final class AeronCluster implements AutoCloseable
                 {
                     for (final MemberIngress member : memberByIdMap.values())
                     {
-                        if (null == member.publication && NULL_VALUE != member.registrationId)
+                        if (null == member.publication && null == member.publicationException)
                         {
+                            if (NULL_VALUE == member.registrationId)
+                            {
+                                member.asyncAddPublication();
+                            }
                             member.asyncGetPublication();
                         }
 
@@ -2633,7 +2637,10 @@ public final class AeronCluster implements AutoCloseable
             }
             catch (final RegistrationException ex)
             {
-                publicationException = ex;
+                if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE != ex.errorCode())
+                {
+                    publicationException = ex;
+                }
                 registrationId = NULL_VALUE;
             }
         }
