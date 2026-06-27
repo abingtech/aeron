@@ -30,10 +30,10 @@ public interface FragmentHandler
      * Within this callback reentrant calls to the {@link io.aeron.Aeron} client are not permitted and
      * will result in undefined behaviour.
      *
-     * @param buffer containing the data.
-     * @param offset at which the data begins.
-     * @param length of the data in bytes.
-     * @param header representing the metadata for the data.
+     * @param buffer containing the data. 用于存储数据的缓冲区
+     * @param offset at which the data begins. 表示消息起始位置的缓冲区偏移量
+     * @param length of the data in bytes. 消息的长度
+     * @param header representing the metadata for the data. 包含消息元数据的头部信息
      */
     void onFragment(DirectBuffer buffer, int offset, int length, Header header);
 }

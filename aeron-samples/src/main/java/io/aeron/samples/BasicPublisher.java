@@ -44,6 +44,8 @@ public class BasicPublisher
 
     /**
      * Main method for launching the process.
+     * Pub 将消息通过mmap发送到缓冲区中，再通过Media Driver的Sender将消息通过udp发送给对方的Media Driver的Receiver，消息同样通过mmap放到对方的缓冲区中，
+     * 这样Sub 就可以收到数据了
      *
      * @param args passed to the process.
      * @throws InterruptedException if the thread sleep delay is interrupted.
@@ -52,15 +54,25 @@ public class BasicPublisher
     {
         System.out.println("Publishing to " + CHANNEL + " on stream id " + STREAM_ID);
 
+        String aeronDir = "/tmp/aeron-mmap-pub";
+
+        final MediaDriver.Context driverCtx = new MediaDriver.Context()
+                .aeronDirectoryName(aeronDir)
+                .dirDeleteOnStart(false)      // 启动时不删除
+                .dirDeleteOnShutdown(false);   // 关闭时不删除，便于 AeronStat 读取
+
         // If configured to do so, create an embedded media driver within this application rather
         // than relying on an external one.
-        try (MediaDriver driver = EMBEDDED_MEDIA_DRIVER ? MediaDriver.launchEmbedded() : null)
+        try (MediaDriver driver = EMBEDDED_MEDIA_DRIVER ? MediaDriver.launchEmbedded(driverCtx) : null)
         {
 
             final Aeron.Context ctx = new Aeron.Context();
             if (EMBEDDED_MEDIA_DRIVER)
             {
                 ctx.aeronDirectoryName(driver.aeronDirectoryName());
+                // Pub，/var/folders/sx/_fsxf68s0cd4wrymf_4rvbl00000gn/T/aeron-huangqibing-391204ac-25e6-4f1c-a11b-3fb6d4eccca3
+                // Sub，/var/folders/sx/_fsxf68s0cd4wrymf_4rvbl00000gn/T/aeron-huangqibing-6e05e02e-f938-4588-8ce3-28d43e501e0c
+                System.out.println("Pub端Media Driver的目录：" + ctx.aeronDirectoryName());
             }
 
             // Connect a new Aeron instance to the media driver and create a publication on
@@ -77,6 +89,9 @@ public class BasicPublisher
                     System.out.print("Offering " + i + "/" + NUMBER_OF_MESSAGES + " - ");
 
                     final int length = buffer.putStringWithoutLengthAscii(0, "Hello World! " + i);
+                    // 注意，循环很快，这里offer时可能Sub 的Media Driver还没连接上Pub 的MD，所以第0条消息会直接丢失
+//                    Offering 0/10000000 - Offer failed because publisher is not connected to a subscriber
+//                    No active subscribers detected
                     final long position = publication.offer(buffer, 0, length);
 
                     if (position > 0)

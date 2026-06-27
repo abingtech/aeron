@@ -80,6 +80,7 @@ public class SamplesUtil
         return
             (subscription) ->
             {
+                // FragmentAssembler 实现了 FragmentHandler 接口
                 final FragmentAssembler assembler = new FragmentAssembler(fragmentHandler);
                 while (running.get())
                 {

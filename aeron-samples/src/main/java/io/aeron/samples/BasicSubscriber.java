@@ -52,9 +52,17 @@ public class BasicSubscriber
     {
         System.out.println("Subscribing to " + CHANNEL + " on stream id " + STREAM_ID);
         final AtomicBoolean running = new AtomicBoolean(true);
+
+        String aeronDir = "/tmp/aeron-mmap-sub";
+
+        final MediaDriver.Context driverCtx = new MediaDriver.Context()
+                .aeronDirectoryName(aeronDir)
+                .dirDeleteOnStart(false)      // 启动时不删除
+                .dirDeleteOnShutdown(false);   // 关闭时不删除，便于 AeronStat 读取
+
         try (ShutdownSignalBarrier barrier = new ShutdownSignalBarrier(() -> running.set(false));
             MediaDriver driver = EMBEDDED_MEDIA_DRIVER ?
-                MediaDriver.launchEmbedded(new MediaDriver.Context().terminationHook(barrier::signalAll)) : null)
+                MediaDriver.launchEmbedded(driverCtx.terminationHook(barrier::signalAll)) : null)
         {
             final Aeron.Context ctx = new Aeron.Context()
                 .availableImageHandler(SamplesUtil::printAvailableImage)
@@ -63,6 +71,8 @@ public class BasicSubscriber
             if (EMBEDDED_MEDIA_DRIVER)
             {
                 ctx.aeronDirectoryName(driver.aeronDirectoryName());
+                // Sub端Media Driver的目录：/var/folders/sx/_fsxf68s0cd4wrymf_4rvbl00000gn/T/aeron-huangqibing-6e05e02e-f938-4588-8ce3-28d43e501e0c
+                System.out.println("Sub端Media Driver的目录：" + ctx.aeronDirectoryName());
             }
 
             final FragmentHandler fragmentHandler = SamplesUtil.printAsciiMessage(STREAM_ID);
@@ -73,6 +83,7 @@ public class BasicSubscriber
             // The Aeron and Subscription classes implement "AutoCloseable" and will automatically
             // clean up resources when this try block is finished
             try (Aeron aeron = Aeron.connect(ctx);
+                 // addSubscription方法会一直阻塞，直到MD响应该请求，或者超时
                 Subscription subscription = aeron.addSubscription(CHANNEL, STREAM_ID))
             {
                 SamplesUtil.subscriberLoop(fragmentHandler, FRAGMENT_COUNT_LIMIT, running).accept(subscription);

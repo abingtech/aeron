@@ -117,6 +117,9 @@ public class AeronStat
         Pattern streamFilter = null;
         Pattern channelFilter = null;
 
+         System.setProperty("aeron.dir", "/tmp/aeron-mmap-sub");
+//        System.setProperty("aeron.dir", "/tmp/aeron-mmap-pub");
+
         if (0 != args.length)
         {
             checkForHelp(args);

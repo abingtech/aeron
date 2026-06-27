@@ -199,6 +199,7 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
 
         for (int i = startingIndex; i < length && fragmentsRead < fragmentLimit; i++)
         {
+            // 委托给 Image 的 poll
             fragmentsRead += images[i].poll(fragmentHandler, fragmentLimit - fragmentsRead);
         }
 
