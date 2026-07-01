@@ -216,7 +216,7 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_RECEIVER_IO_VECTOR_CAPACITY_DEFAULT UINT32_C(4)
 #define AERON_SENDER_IO_VECTOR_CAPACITY_DEFAULT UINT32_C(4)
 #define AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND_DEFAULT UINT32_C(4)
-#define AERON_DRIVER_RESOURCE_FREE_LIMIT_DEFAULT UINT32_C(10)
+#define AERON_DRIVER_RESOURCE_FREE_LIMIT_DEFAULT UINT32_C(1)
 #define AERON_CPU_AFFINITY_DEFAULT (-1)
 #define AERON_DRIVER_CPUSET_AFFINITY_DEFAULT (false)
 #define AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT (false)
@@ -1191,7 +1191,6 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->usable_fs_space_func = _context->perform_storage_checks ?
         aeron_usable_fs_space : aeron_usable_fs_space_disabled;
     _context->raw_log_map_func = aeron_raw_log_map;
-    _context->raw_log_close_func = aeron_raw_log_close;
     _context->raw_log_free_func = aeron_raw_log_free;
 
     _context->log.to_driver_interceptor = aeron_driver_conductor_to_driver_interceptor_null;

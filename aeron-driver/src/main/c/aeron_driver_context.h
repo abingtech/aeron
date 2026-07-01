@@ -220,7 +220,7 @@ typedef struct aeron_driver_context_stct
     uint32_t receiver_io_vector_capacity;                   /* aeron.receiver.io.vector.capacity = 4 */
     uint32_t sender_io_vector_capacity;                     /* aeron.sender.io.vector.capacity = 4 */
     uint32_t network_publication_max_messages_per_send;     /* aeron.network.publication.max.messages.per.send = 4 */
-    uint32_t resource_free_limit;                           /* aeron.driver.resource.free.limit = 10 */
+    uint32_t resource_free_limit;                           /* aeron.driver.resource.free.limit = 1 */
     uint32_t max_resend;                                    /* aeron.max.resend = 16 */
 
     int32_t conductor_cpu_affinity_no;                      /* aeron.conductor.cpu.affinity = -1 */
@@ -303,7 +303,6 @@ typedef struct aeron_driver_context_stct
 
     aeron_usable_fs_space_func_t usable_fs_space_func;
     aeron_raw_log_map_func_t raw_log_map_func;
-    aeron_raw_log_close_func_t raw_log_close_func;
     aeron_raw_log_free_func_t raw_log_free_func;
 
     aeron_flow_control_strategy_supplier_func_t unicast_flow_control_supplier_func;

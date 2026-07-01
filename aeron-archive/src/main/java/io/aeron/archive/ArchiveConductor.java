@@ -21,6 +21,7 @@ import io.aeron.ChannelUri;
 import io.aeron.ChannelUriStringBuilder;
 import io.aeron.CommonContext;
 import io.aeron.Counter;
+import io.aeron.ErrorCode;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Subscription;
@@ -35,6 +36,7 @@ import io.aeron.archive.codecs.SourceLocation;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.DutyCycleTracker;
 import io.aeron.exceptions.AeronException;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.security.Authenticator;
@@ -57,6 +59,7 @@ import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.CachedEpochClock;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
@@ -126,6 +129,7 @@ abstract class ArchiveConductor
     private long nextSessionId = ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE);
     private long markFileUpdateDeadlineMs = 0;
     private int replayId = 1;
+    private int numActiveReplays;
     private volatile boolean isAbort;
 
     private final RecordingSummary recordingSummary = new RecordingSummary();
@@ -211,8 +215,8 @@ abstract class ArchiveConductor
         {
             final ChannelUri controlChannelUri = ChannelUri.parse(ctx.controlChannel());
             controlChannelUri.put(CommonContext.SPARSE_PARAM_NAME, Boolean.toString(ctx.controlTermBufferSparse()));
-            controlSubscription = aeron.addSubscription(
-                controlChannelUri.toString(), ctx.controlStreamId(), null, this);
+            controlSubscription = addSubscriptionWithRetry(
+                aeron, ctx.idleStrategy(), controlChannelUri.toString(), ctx.controlStreamId(), this);
         }
         else
         {
@@ -743,7 +747,7 @@ abstract class ArchiveConductor
         final Counter limitPositionCounter,
         final ControlSession controlSession)
     {
-        if (replaySessionByIdMap.size() >= ctx.maxConcurrentReplays())
+        if (numActiveReplays == ctx.maxConcurrentReplays())
         {
             final String msg = "max concurrent replays reached " + ctx.maxConcurrentReplays();
             controlSession.sendErrorResponse(correlationId, MAX_REPLAYS, msg);
@@ -830,7 +834,7 @@ abstract class ArchiveConductor
             if (0 == replayLength)
             {
                 final String msg =
-                    "When replaying and stopping the replay length must be non-zero, recordingId=" + recordingId;
+                    "when replaying and stopping the replay length must be non-zero, recordingId=" + recordingId;
                 controlSession.sendErrorResponse(correlationId, EMPTY_RECORDING, msg);
             }
         }
@@ -881,12 +885,15 @@ abstract class ArchiveConductor
                 recordingSummary.segmentFileLength,
                 recordingSummary.termBufferLength,
                 recordingSummary.streamId,
-                aeron.asyncAddExclusivePublication(channelBuilder.build(), replayStreamId),
+                channelBuilder.build(),
+                replayStreamId,
                 fileIoMaxLength,
                 replayLimitPositionCounter,
                 aeron,
                 controlSession,
                 this));
+
+            onReplayStart();
         }
         catch (final Exception ex)
         {
@@ -894,6 +901,16 @@ abstract class ArchiveConductor
             controlSession.sendErrorResponse(correlationId, msg);
             throw ex;
         }
+    }
+
+    void onReplayStart()
+    {
+        numActiveReplays++;
+    }
+
+    void onReplayEnd()
+    {
+        numActiveReplays--;
     }
 
     void newReplaySession(
@@ -1337,6 +1354,7 @@ abstract class ArchiveConductor
         }
 
         replaySessionByIdMap.remove(session.sessionId());
+        onReplayEnd();
         closeSession(session);
         ctx.replaySessionCounter().decrementRelease();
     }
@@ -2756,5 +2774,37 @@ abstract class ArchiveConductor
             this.controlSession = controlSession;
             this.deadlineNs = deadlineNs;
         }
+    }
+
+    private static Subscription addSubscriptionWithRetry(
+        final Aeron aeron,
+        final IdleStrategy idleStrategy,
+        final String channel,
+        final int streamId,
+        final UnavailableImageHandler unavailableImageHandler)
+    {
+        Subscription subscription = null;
+        do
+        {
+            try
+            {
+                subscription = aeron.addSubscription(
+                    channel, streamId, null, unavailableImageHandler);
+            }
+            catch (final RegistrationException ex)
+            {
+                if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE != ex.errorCode())
+                {
+                    throw ex;
+                }
+                else
+                {
+                    idleStrategy.idle();
+                }
+            }
+        }
+        while (null == subscription);
+
+        return subscription;
     }
 }
